@@ -149,6 +149,7 @@ if [ "$OK" -ge "$NPARTS" ]; then
   echo
   echo "You can now delete $STATE"
   [ -n "$MADE_TAR" ] && echo "...and the tar we made: $MADE_TAR"
+  exit 0
 else
   echo "$OK of $NPARTS parts done. Run the same command again to finish."
   exit 1
