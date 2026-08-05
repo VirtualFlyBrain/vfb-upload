@@ -18,6 +18,15 @@ TRIES=4                        # attempts per part
 die() { echo "ERROR: $*" >&2; exit 1; }
 size_of() { wc -c < "$1" | tr -d ' '; }
 
+# Human-readable version of a count of seconds, e.g. 90 -> "1m30s".
+fmt_eta() {
+  local s=$1
+  if   [ "$s" -lt 60 ];   then printf '%ds' "$s"
+  elif [ "$s" -lt 3600 ]; then printf '%dm%02ds' $(( s / 60 )) $(( s % 60 ))
+  else                         printf '%dh%02dm' $(( s / 3600 )) $(( (s % 3600) / 60 ))
+  fi
+}
+
 # ---- what are we uploading? ------------------------------------------------
 SRC="${1:-}"
 [ -n "$SRC" ] || die "usage: $0 <file-or-folder>"
@@ -82,21 +91,25 @@ echo
 
 BADPARTS=""
 OK=0
+SENT_BYTES=0
+RATE_BYTES=0
+RATE_SECS=0
 for (( i=0; i<NPARTS; i++ )); do
   p=$(printf "%s.%s.part-%04d" "$NAME" "$ID" "$i")
   left=$(( SIZE - i * CHUNK ))
   [ "$left" -gt "$CHUNK" ] && want=$CHUNK || want=$left
   n="[$((i+1))/$NPARTS]"
 
-  if grep -qx "$p" "$DONEFILE"; then echo "$n done already"; OK=$((OK+1)); continue; fi
+  if grep -qx "$p" "$DONEFILE"; then echo "$n done already"; OK=$((OK+1)); SENT_BYTES=$((SENT_BYTES+want)); continue; fi
 
   # Might already be up there from an earlier run that died mid-way.
   case "$(remote_size "$p")" in
-    "$want") echo "$p" >> "$DONEFILE"; echo "$n done already"; OK=$((OK+1)); continue ;;
+    "$want") echo "$p" >> "$DONEFILE"; echo "$n done already"; OK=$((OK+1)); SENT_BYTES=$((SENT_BYTES+want)); continue ;;
     "")      ;;
     *)       BADPARTS="$BADPARTS $p"; echo "$n WRONG SIZE on the server — see below"; continue ;;
   esac
 
+  t0=$SECONDS
   PART="$STATE/$p"
   dd if="$SRC" of="$PART" bs=1048576 skip=$(( i * CHUNK_MIB )) count=$CHUNK_MIB 2>/dev/null
   got=$(size_of "$PART")
@@ -126,7 +139,16 @@ for (( i=0; i<NPARTS; i++ )); do
   # A 201 doesn't mean it arrived intact: this server has stored empty and
   # truncated files and still reported success. Check the size it really has.
   case "$(remote_size "$p")" in
-    "$want") echo "$p" >> "$DONEFILE"; OK=$((OK+1)); echo "$n sent and size-checked" ;;
+    "$want")
+      echo "$p" >> "$DONEFILE"; OK=$((OK+1)); SENT_BYTES=$((SENT_BYTES+want))
+      RATE_BYTES=$((RATE_BYTES+want)); RATE_SECS=$((RATE_SECS + SECONDS - t0))
+      msg="$n sent and size-checked"
+      remaining=$(( SIZE - SENT_BYTES ))
+      if [ "$RATE_SECS" -gt 0 ] && [ "$remaining" -gt 0 ]; then
+        msg="$msg — about $(fmt_eta $(( remaining * RATE_SECS / RATE_BYTES ))) left"
+      fi
+      echo "$msg"
+      ;;
     "")      echo "$n sent, but couldn't check the size — re-run later to confirm" ;;
     *)       BADPARTS="$BADPARTS $p"; echo "$n sent but stored at the WRONG SIZE — see below" ;;
   esac
