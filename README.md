@@ -45,10 +45,16 @@ You'll see:
 Uploading mydata.tar — 257698037760 bytes in 48 part(s) of 5120 MiB
 
 [1/48] uploading ...
-######################################################### 100.0%
-[1/48] sent and size-checked — about 6h12m left
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 5120M    0     2  100 5120M      0  12.4M  0:06:52  0:06:52 --:--:-- 12.4M
+[1/48] sent and size-checked — about 5h22m left
 [2/48] uploading ...
 ```
+
+The `Upload` column is your current speed and `Time Left` counts down the part
+being sent; the script's own `about ... left` is for the whole file. Progress
+goes to stderr, so redirecting it away (`2>/dev/null`) hides errors too.
 
 Big uploads take hours — leaving it running overnight is fine. If the
 connection drops or the machine sleeps, just run the same command again.

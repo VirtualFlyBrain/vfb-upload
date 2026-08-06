@@ -269,7 +269,10 @@ local disk first, or try smaller parts with VFB_CHUNK_MIB."
     # No --fail/--fail-with-body: not present in older curl. Judge by status.
     # The local path is quoted and the remote name given outright, so a comma
     # or semicolon in it can't be read as curl's own syntax.
-    code=$(token_cfg | curl -sS -# --connect-timeout 30 --speed-limit 10000 --speed-time 600 \
+    # No -s here on purpose: it silences the progress meter, so you'd stare at
+    # nothing for an hour per part. The meter goes to stderr; the status we
+    # read comes back on stdout, so the two don't collide.
+    code=$(token_cfg | curl -S --connect-timeout 30 --speed-limit 10000 --speed-time 600 \
              -K - -F "file=@\"$PART\";filename=\"$p\"" "$UPLOAD" \
              -o "$STATE/last-reply" -w '%{http_code}')
     case "$code" in
