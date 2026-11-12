@@ -15,8 +15,9 @@
 #                            directory is small or has a quota.
 #   VFB_CHUNK_MIB=1024       part size in MiB. Default 5120 (5 GiB). Smaller
 #                            parts lose less work on a flaky connection.
-#   VFB_SHA256=1             also print a checksum at the end, so VFB can check
-#                            the reassembled file (reads the whole file again).
+#   VFB_SHA256=0             skip the checksum printed at the end. VFB checks
+#                            the reassembled file against it, so only turn it
+#                            off if reading the whole file again is too slow.
 #
 set -u
 
@@ -318,14 +319,18 @@ if [ -n "$BADPARTS" ]; then
 fi
 
 if [ "$OK" -ge "$NPARTS" ]; then
+  # Worked out before the report is printed, not during it, so the block below
+  # stays in one piece: it is meant to be copied out and sent to VFB whole.
+  if [ "${VFB_SHA256:-1}" != 0 ]; then
+    echo "Working out the checksum (reads the whole file again) ..."
+    sum=$( { shasum -a 256 "$SRC" 2>/dev/null || sha256sum "$SRC" 2>/dev/null; } | awk 'NR==1{print $1}' )
+    echo
+  fi
   echo "All $NPARTS part(s) uploaded and size-checked. Please tell VFB:"
   echo "    file:  $NAME"
   echo "    size:  $SIZE bytes"
   echo "    parts: $NPARTS, named $SAFE.$ID.part-0000 onwards"
-  if [ "${VFB_SHA256:-}" = 1 ]; then
-    echo
-    echo "Working out the checksum (reads the whole file again) ..."
-    sum=$( { shasum -a 256 "$SRC" 2>/dev/null || sha256sum "$SRC" 2>/dev/null; } | awk 'NR==1{print $1}' )
+  if [ "${VFB_SHA256:-1}" != 0 ]; then
     [ -n "${sum:-}" ] && echo "    sha256: $sum" || echo "    (no shasum or sha256sum on this machine)"
   fi
   if [ -s "$STATE/superseded" ]; then
